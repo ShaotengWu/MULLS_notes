@@ -291,6 +291,8 @@ int main(int argc, char **argv)
     double time_count = 0.0;
     std::vector<std::string> filenames;
     dataio.batch_read_filenames_in_folder(pc_folder, "_filelist.txt", pc_format, filenames, FLAGS_frame_num_begin, FLAGS_frame_num_end, FLAGS_frame_step);
+
+    // std::vector<Eigen::Matrix4d>  cs is short for Coordinate System
     Matrix4ds poses_gt_body_cs;  //in vehicle body (gnssins) coordinate system
     Matrix4ds poses_lo_body_cs;  //in vehicle body (gnssins) coordinate system
     Matrix4ds poses_gt_lidar_cs; //in lidar coordinate system
@@ -315,6 +317,7 @@ int main(int argc, char **argv)
     int frame_num = filenames.size();
     std::vector<std::vector<float>> timing_array(frame_num); //unit: s
 
+    // 是cloudblock的shared_ptr
     cloudblock_Ptr cblock_target(new cloudblock_t());
     cloudblock_Ptr cblock_source(new cloudblock_t());
     cloudblock_Ptr cblock_history(new cloudblock_t());
@@ -331,9 +334,9 @@ int main(int argc, char **argv)
     Eigen::Matrix4d first_frame_body = Eigen::Matrix4d::Identity();
     LOG(WARNING) << "[" << omp_get_max_threads() << "] threads availiable in total";
 
-    bool seg_new_submap = false, local_map_recalculate_feature_on = false, motion_com_while_reg_on = false, apply_roi_filter = false, lo_status_healthy =true;
-    int submap_count = 0, cooling_index =0, accu_frame = 0, accu_frame_count_wo_opt =0;
-    float accu_tran = 0.0, accu_rot_deg = 0.0, current_linear_velocity=0.0, current_angular_velocity =0.0, add_length=0.0, roi_min_y = 0.0, roi_max_y = 0.0;
+    bool seg_new_submap = false, local_map_recalculate_feature_on = false, motion_com_while_reg_on = false, apply_roi_filter = false, lo_status_healthy = true;
+    int submap_count = 0, cooling_index = 0, accu_frame = 0, accu_frame_count_wo_opt = 0;
+    float accu_tran = 0.0, accu_rot_deg = 0.0, current_linear_velocity = 0.0, current_angular_velocity = 0.0, add_length = 0.0, roi_min_y = 0.0, roi_max_y = 0.0;
     float non_max_suppresssion_radius = 0.25 * pca_neigh_r;
 
     if (FLAGS_motion_compensation_method > 0)
@@ -356,10 +359,15 @@ int main(int argc, char **argv)
     dataio.read_pc_cloud_block(cblock_target);
 
     std::chrono::steady_clock::time_point tic_feature_extraction_init = std::chrono::steady_clock::now();
+
     if (FLAGS_apply_dist_filter)
+        // 根据xy距离滤波 剔除过远或过近的点云
         cfilter.dist_filter(cblock_target->pc_raw, FLAGS_min_dist_used, FLAGS_max_dist_used);
+
     if (FLAGS_vertical_ang_calib_on) //intrinsic angle correction
+        //! 不知道什么矫正方法
         cfilter.vertical_intrinsic_calibration(cblock_target->pc_raw, FLAGS_vertical_ang_correction_deg);
+
     cfilter.extract_semantic_pts(cblock_target, FLAGS_cloud_down_res, gf_grid_resolution, gf_max_grid_height_diff,
                                  gf_neighbor_height_diff, FLAGS_gf_max_h, ground_down_rate,
                                  nonground_down_rate, pca_neigh_r, pca_neigh_k,
@@ -375,10 +383,11 @@ int main(int argc, char **argv)
                                  FLAGS_facade_down_fixed_num, FLAGS_beam_down_fixed_num, FLAGS_roof_down_fixed_num, FLAGS_unground_down_fixed_num,
                                  FLAGS_beam_max_height, FLAGS_approx_scanner_height + 0.5, FLAGS_approx_scanner_height, FLAGS_underground_height_thre,
                                  FLAGS_feature_pts_ratio_guess, FLAGS_semantic_assist_on, apply_roi_filter, roi_min_y, roi_max_y);
-                                 
+
     std::chrono::steady_clock::time_point toc_feature_extraction_init = std::chrono::steady_clock::now();
     std::chrono::duration<double> time_used_init_feature_extraction = std::chrono::duration_cast<std::chrono::duration<double>>(toc_feature_extraction_init - tic_feature_extraction_init);
     timing_array[0].push_back(time_used_init_feature_extraction.count());
+
     for (int k = 0; k < 3; k++) //for the first frame, we only extract its feature points
         timing_array[0].push_back(0.0);
 
@@ -556,7 +565,7 @@ int main(int argc, char **argv)
                                 global_reg_on = true;
                         }
                         if (!global_reg_on && !stable_reg_found && accu_frame_count_wo_opt > FLAGS_num_frame_thre_large_drift) //TODO: the tolerance should be determine using pose covariance (reference: overlapnet)
-                            continue;                                                                                                        //without the global registration and since the lidar odometry may drift a lot, the inital guess may not be reliable, just skip
+                            continue;                                                                                          //without the global registration and since the lidar odometry may drift a lot, the inital guess may not be reliable, just skip
                         int registration_status_map2map = creg.mm_lls_icp(current_registration_edges[j], max_iteration_num_m2m, 3.5 * reg_corr_dis_thre_init,
                                                                           converge_tran, converge_rot_d, 2.0 * reg_corr_dis_thre_min, dis_thre_update_rate,
                                                                           FLAGS_used_feature_type, "1101", z_xy_balance_ratio,
@@ -631,7 +640,7 @@ int main(int argc, char **argv)
         if (FLAGS_scan_to_scan_module_on || i <= FLAGS_initial_scan2scan_frame_num)
         {
             creg.assign_source_target_cloud(cblock_target, cblock_source, scan2scan_reg_con);
-            if (!strcmp(FLAGS_baseline_reg_method.c_str(), "ndt")) //baseline_method 
+            if (!strcmp(FLAGS_baseline_reg_method.c_str(), "ndt")) //baseline_method
                 creg.omp_ndt(scan2scan_reg_con, FLAGS_reg_voxel_size, FLAGS_ndt_searching_method,
                              initial_guess_tran, FLAGS_reg_intersection_filter_on);
             else if (!strcmp(FLAGS_baseline_reg_method.c_str(), "gicp")) //baseline_method
@@ -825,14 +834,15 @@ int main(int argc, char **argv)
     cblock_frames.push_back(current_cblock_frame);
     LOG(INFO) << "Lidar Odometry done. Average processing time per frame is ["
               << 1000.0 * time_count / frame_num << "] ms over [" << frame_num << "] frames\n";
-    if (FLAGS_real_time_viewer_on) {
+    if (FLAGS_real_time_viewer_on)
+    {
         mviewer.keep_visualize(map_viewer);
     }
 
     if (loop_closure_detection_on)
     {
         std::chrono::steady_clock::time_point tic_inner_submap_refine = std::chrono::steady_clock::now();
-        if (FLAGS_framewise_pgo_on)//method 1: pgo of all the frame nodes
+        if (FLAGS_framewise_pgo_on) //method 1: pgo of all the frame nodes
         {
             pgoptimizer.set_robust_function(FLAGS_robust_kernel_on);
             pgoptimizer.set_equal_weight(FLAGS_equal_weight_on);
@@ -950,7 +960,8 @@ int main(int argc, char **argv)
             cblock_submaps[i]->free_all();
         constraints().swap(pgo_edges);
     }
-    if (FLAGS_real_time_viewer_on) {
+    if (FLAGS_real_time_viewer_on)
+    {
         map_viewer->removeAllPointClouds(); // refresh the map
         mviewer.update_lo_pose(poses_lo_lidar_cs, poses_gt_lidar_cs, map_viewer, display_time_ms);
         mviewer.update_submap_node(cblock_submaps, map_viewer, display_time_ms);
@@ -989,7 +1000,8 @@ int main(int argc, char **argv)
                 }
                 pc_map_merged->points.insert(pc_map_merged->points.end(), cblock_frames[i]->pc_raw_w->points.begin(), cblock_frames[i]->pc_raw_w->points.end());
                 cfilter.random_downsample(cblock_frames[i]->pc_raw_w, 2);
-                if (FLAGS_real_time_viewer_on) {
+                if (FLAGS_real_time_viewer_on)
+                {
                     mviewer.display_dense_map_realtime(cblock_frames[i], map_viewer, frame_num, display_time_ms);
                 }
             }
@@ -1049,7 +1061,8 @@ int main(int argc, char **argv)
             ec.print_error(slam_errors, true);
         }
     }
-    if (FLAGS_real_time_viewer_on) {
+    if (FLAGS_real_time_viewer_on)
+    {
         map_viewer->removeAllShapes();
         mviewer.keep_visualize(map_viewer);
     }
