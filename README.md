@@ -1,3 +1,6 @@
+ MULLS中文注释 仅供参考学习交流
+ 主要是对论文涉及到的部分mulls_slam.cpp及用到的函数做了一些笔记，原作者的注释十分详细，提供了很大的帮助，非常感谢原作者的工作！
+
 ## MULLS: Versatile LiDAR SLAM via Multi-metric Linear Least Square 
 
 This repository implements MULLS, an efficient, low-drift, and versatile LiDAR-only SLAM system with both the front-end and back-end.  It's an overall updated version of [LLS-LOAM](https://github.com/YuePanEdward/LLS-LOAM). 

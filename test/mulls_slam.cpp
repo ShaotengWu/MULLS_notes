@@ -368,6 +368,7 @@ int main(int argc, char **argv)
         //! 不知道什么矫正方法
         cfilter.vertical_intrinsic_calibration(cblock_target->pc_raw, FLAGS_vertical_ang_correction_deg);
 
+    // 提取地面点和各种特征 对应论文 III B
     cfilter.extract_semantic_pts(cblock_target, FLAGS_cloud_down_res, gf_grid_resolution, gf_max_grid_height_diff,
                                  gf_neighbor_height_diff, FLAGS_gf_max_h, ground_down_rate,
                                  nonground_down_rate, pca_neigh_r, pca_neigh_k,
@@ -391,7 +392,9 @@ int main(int argc, char **argv)
     for (int k = 0; k < 3; k++) //for the first frame, we only extract its feature points
         timing_array[0].push_back(0.0);
 
-    initial_guess_tran(0, 3) = 0.5;     //initialization
+    initial_guess_tran(0, 3) = 0.5; //initialization 假设x方向移动0.5m
+
+    //! 主循环开始
     for (int i = 1; i < frame_num; i++) //throughout all the used frames
     {
         std::chrono::steady_clock::time_point tic = std::chrono::steady_clock::now();
@@ -408,18 +411,25 @@ int main(int argc, char **argv)
                 cblock_source->pose_gt = init_poses_gt_lidar_cs.inverse() * poses_gt_lidar_cs[i];
             poses_gt_body_cs[i] = poses_gt_body_cs[0].inverse() * poses_gt_body_cs[i]; //according to the first frame
         }
+
         dataio.read_pc_cloud_block(cblock_source);
         std::chrono::steady_clock::time_point toc_import_pc = std::chrono::steady_clock::now();
+        // 根据xy距离滤波 剔除过远或过近的点云
         if (FLAGS_apply_dist_filter)
             cfilter.dist_filter(cblock_source->pc_raw, FLAGS_min_dist_used, FLAGS_max_dist_used);
+        //! 不知道什么校正
         if (FLAGS_vertical_ang_calib_on) //intrinsic angle correction
             cfilter.vertical_intrinsic_calibration(cblock_source->pc_raw, FLAGS_vertical_ang_correction_deg);
+
         // motion compensation [first step: using the last frame's transformation]
+        // 运动补偿 但是只存了s 比例放在curvature字段  越接近最后一个点 s越小
         if (FLAGS_motion_compensation_method == 1) //calculate from time-stamp
             cfilter.get_pts_timestamp_ratio_in_frame(cblock_source->pc_raw, true);
         else if (FLAGS_motion_compensation_method == 2)                                   //calculate from azimuth
             cfilter.get_pts_timestamp_ratio_in_frame(cblock_source->pc_raw, false, 90.0); //HESAI Lidar: 90.0 (y+ axis, clockwise), Velodyne Lidar: 180.0
-        if (!strcmp(FLAGS_baseline_reg_method.c_str(), "ndt"))                            //baseline_method
+
+        // 这里是做实验时候选取的不同方法 正常应该是选取最后一个else提取特征
+        if (!strcmp(FLAGS_baseline_reg_method.c_str(), "ndt")) //baseline_method
             cfilter.voxel_downsample(cblock_source->pc_raw, cblock_source->pc_down, FLAGS_cloud_down_res);
         else if (!strcmp(FLAGS_baseline_reg_method.c_str(), "gicp")) //baseline_method
             cfilter.voxel_downsample(cblock_source->pc_raw, cblock_source->pc_down, FLAGS_cloud_down_res);
@@ -438,11 +448,16 @@ int main(int argc, char **argv)
         std::chrono::steady_clock::time_point toc_feature_extraction = std::chrono::steady_clock::now();
 
         //update local map
-        if (i % FLAGS_local_map_recalculation_frequency == 0)
+        if (i % FLAGS_local_map_recalculation_frequency == 0) // 这个值是99999 基本不会使用
             local_map_recalculate_feature_on = true;
         else
             local_map_recalculate_feature_on = false;
 
+        // 对前面几帧的处理不一样
+        // 第一次走到这里·的时候 target就是第一帧 参考循环外  一开始local map是空的
+        // todo 后面会registration 将source和target做处理
+        //! 经过这个函数 上一帧的点云被加进了local map   target相当于上一帧 local map的pose_lo也被更新
+        // III D
         if (i > FLAGS_initial_scan2scan_frame_num + 1)
             mmanager.update_local_map(cblock_local_map, cblock_target, local_map_radius, local_map_max_pt_num, vertex_keeping_num, append_frame_radius,
                                       FLAGS_apply_map_based_dynamic_removal, FLAGS_used_feature_type, dynamic_removal_radius, dynamic_dist_thre_min, current_linear_velocity * 0.15,
@@ -451,6 +466,7 @@ int main(int argc, char **argv)
             mmanager.update_local_map(cblock_local_map, cblock_target, local_map_radius, local_map_max_pt_num, vertex_keeping_num, append_frame_radius, false, FLAGS_used_feature_type);
 
         int temp_accu_frame = accu_frame;
+        //todo 返回来看
         if (loop_closure_detection_on) //determine if we can add a new submap
             seg_new_submap = mmanager.judge_new_submap(accu_tran, accu_rot_deg, accu_frame, FLAGS_submap_accu_tran, FLAGS_submap_accu_rot, FLAGS_submap_accu_frame);
         else
@@ -635,11 +651,14 @@ int main(int argc, char **argv)
                 constraints().swap(current_registration_edges);
             }
         }
+
         std::chrono::steady_clock::time_point toc_loop_closure = std::chrono::steady_clock::now();
         //scan to scan registration
         if (FLAGS_scan_to_scan_module_on || i <= FLAGS_initial_scan2scan_frame_num)
         {
+            // 设置参与registration的点云
             creg.assign_source_target_cloud(cblock_target, cblock_source, scan2scan_reg_con);
+            // 对比ndt gicp mmlls icp
             if (!strcmp(FLAGS_baseline_reg_method.c_str(), "ndt")) //baseline_method
                 creg.omp_ndt(scan2scan_reg_con, FLAGS_reg_voxel_size, FLAGS_ndt_searching_method,
                              initial_guess_tran, FLAGS_reg_intersection_filter_on);
@@ -648,6 +667,7 @@ int main(int argc, char **argv)
                               FLAGS_reg_voxel_size, initial_guess_tran, FLAGS_reg_intersection_filter_on);
             else
             {
+                // 计算scan2scan 对应论文III C
                 int registration_status_scan2scan = creg.mm_lls_icp(scan2scan_reg_con, max_iteration_num_s2s, reg_corr_dis_thre_init + add_length,
                                                                     converge_tran, converge_rot_d, reg_corr_dis_thre_min, dis_thre_update_rate,
                                                                     FLAGS_used_feature_type, FLAGS_corr_weight_strategy, z_xy_balance_ratio,
@@ -667,14 +687,20 @@ int main(int argc, char **argv)
             }
             if (FLAGS_zupt_on_or_not)
                 nav.zupt_simple(scan2scan_reg_con.Trans1_2);
+
+            // 更新source点云的位姿
             cblock_source->pose_lo = cblock_target->pose_lo * scan2scan_reg_con.Trans1_2;
             LOG(INFO) << "scan to scan registration done\nframe [" << i - 1 << "] - [" << i << "]:\n"
                       << scan2scan_reg_con.Trans1_2;
+
+            //! 匀速运动模型
             initial_guess_tran = scan2scan_reg_con.Trans1_2;
         }
+        
         //scan to map registration
         if (i % FLAGS_s2m_frequency == 0 && i > FLAGS_initial_scan2scan_frame_num)
         {
+            // target是local map   source 是新点云
             creg.assign_source_target_cloud(cblock_local_map, cblock_source, scan2map_reg_con);
 
             if (!strcmp(FLAGS_baseline_reg_method.c_str(), "ndt")) //baseline_method

@@ -412,13 +412,14 @@ namespace lo
 
             return true;
         }
-
+        // 越接近最后一个点 s越小
         bool get_pts_timestamp_ratio_in_frame(typename pcl::PointCloud<PointT>::Ptr &cloud_in_out,
                                               bool timestamp_availiable = true,
                                               double scan_begin_ang_anticlock_x_positive_deg = 180.0, float scan_duration_ms = 100)
         {
             double s; //interpolation ratio
             double ang;
+            // 写的很清楚 x轴正向是pi
             double scan_begin_ang_anticlock_x_positive_rad = scan_begin_ang_anticlock_x_positive_deg / 180.0 * M_PI;
 
             double last_timestamp = -DBL_MAX;
@@ -439,6 +440,7 @@ namespace lo
 
                 for (int i = 0; i < cloud_in_out->points.size(); i++)
                 {
+                    // 越接近最后一个点 s越小
                     s = (last_timestamp - cloud_in_out->points[i].curvature) / scan_duration_ms; //curvature as time stamp
                     cloud_in_out->points[i].curvature = min_(1.0, max_(0.0, s));                 //curvature as the time ratio in each frame
                 }
@@ -498,6 +500,7 @@ namespace lo
                                        Eigen::Matrix4d &Tran, float s_ambigous_thre = 0.0)
         {
             *pc_out = *pc_in;
+            // T_source_target
             Eigen::Vector3d estimated_translation_2_1 = Tran.block<3, 1>(0, 3);
             Eigen::Quaterniond d_quat, estimated_quat2_1;
             Eigen::Vector3d d_translation;
@@ -507,8 +510,13 @@ namespace lo
 #pragma omp parallel for //Multi-thread
             for (int i = 0; i < pc_in->points.size(); i++)
             {
+                // curvature存了之前算出来的纠畸比例因子s 越接近最后一个点 s越小
+                // 对于接近0的或者接近1的 跳过
                 if (pc_in->points[i].curvature < s_ambigous_thre || pc_in->points[i].curvature > 1.0 - s_ambigous_thre) //curvature as the timestamp
                     continue;
+                
+                // 把点云都转到source坐标系下 也就是新点云坐标系中
+                // s = 1的点是在target位置采集的
                 d_quat = Eigen::Quaterniond::Identity().slerp(pc_in->points[i].curvature, estimated_quat2_1); //Spherical linear interpolation (slerp) for quaternion
                 d_translation = pc_in->points[i].curvature * estimated_translation_2_1;
                 Eigen::Vector3d temp_point(pc_in->points[i].x, pc_in->points[i].y, pc_in->points[i].z);
