@@ -1,5 +1,19 @@
- MULLS中文注释 仅供参考学习交流
+ MULLS中文注释 仅供参考学习交流 如有错误请指出，不胜感激！
  主要是对论文涉及到的部分mulls_slam.cpp及用到的函数做了一些笔记，原作者的注释十分详细，提供了很大的帮助，非常感谢原作者的工作！
+
+
+  流程：
+  初始化
+  for(...)
+  {
+   提取特征 III B
+   用上一帧更新local map III D
+   回环检测和pgo III E
+   当前帧和上一帧 scan2scan  III C
+   当前帧和local map 做scan2map III C
+  }
+  所有帧的优化或submap内部优化 III E
+ 
 
 ## MULLS: Versatile LiDAR SLAM via Multi-metric Linear Least Square 
 

@@ -500,7 +500,7 @@ namespace lo
                                        Eigen::Matrix4d &Tran, float s_ambigous_thre = 0.0)
         {
             *pc_out = *pc_in;
-            // T_source_target
+            // T_source_target  或者 T_curr_Last
             Eigen::Vector3d estimated_translation_2_1 = Tran.block<3, 1>(0, 3);
             Eigen::Quaterniond d_quat, estimated_quat2_1;
             Eigen::Vector3d d_translation;

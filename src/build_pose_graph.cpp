@@ -1,5 +1,5 @@
 // Codes for pose graph construction in LiDAR SLAM
-// By Yue Pan 
+// By Yue Pan
 
 #include "build_pose_graph.h"
 
@@ -12,227 +12,233 @@
 
 namespace lo
 {
-	bool Constraint_Finder::find_adjacent_constraint_in_strip(strip &blocks_strip, constraints &innerstrip_cons)
-	{
-		if (!blocks_strip[0].is_single_scanline) //if the cloud block is collected by a multi-scanline sensor, there would be overlapping aera for adjacent cloud blocks, so registration can be applied
-			return 0;
+    bool Constraint_Finder::find_adjacent_constraint_in_strip(strip &blocks_strip, constraints &innerstrip_cons)
+    {
+        if (!blocks_strip[0].is_single_scanline) //if the cloud block is collected by a multi-scanline sensor, there would be overlapping aera for adjacent cloud blocks, so registration can be applied
+            return 0;
 
-		for (int i = 0; i < blocks_strip.size() - 1; i++)
-		{
-			constraint_t con;
-			con.block1 = boost::make_shared<cloudblock_t>(blocks_strip[i]);
-			con.block2 = boost::make_shared<cloudblock_t>(blocks_strip[i + 1]);
-			con.con_type = ADJACENT; //Adjacent
-			innerstrip_cons.push_back(con);
-			//problem: make_shared(struct containing eigen)
-		}
-		return 1;
-	}
+        for (int i = 0; i < blocks_strip.size() - 1; i++)
+        {
+            constraint_t con;
+            con.block1 = boost::make_shared<cloudblock_t>(blocks_strip[i]);
+            con.block2 = boost::make_shared<cloudblock_t>(blocks_strip[i + 1]);
+            con.con_type = ADJACENT; //Adjacent
+            innerstrip_cons.push_back(con);
+            //problem: make_shared(struct containing eigen)
+        }
+        return 1;
+    }
 
-	bool Constraint_Finder::find_strip_adjacent_constraint(strips &blocks_all, constraints &innerstrip_cons_all)
-	{
-		for (int i = 0; i < blocks_all.size(); i++)
-		{
-			constraints innerstrip_cons;
+    bool Constraint_Finder::find_strip_adjacent_constraint(strips &blocks_all, constraints &innerstrip_cons_all)
+    {
+        for (int i = 0; i < blocks_all.size(); i++)
+        {
+            constraints innerstrip_cons;
 
-			if (blocks_all[i].size() > 1)
-				find_adjacent_constraint_in_strip(blocks_all[i], innerstrip_cons);
+            if (blocks_all[i].size() > 1)
+                find_adjacent_constraint_in_strip(blocks_all[i], innerstrip_cons);
 
-			for (int j = 0; j < innerstrip_cons.size(); j++)
-			{
-				innerstrip_cons_all.push_back(innerstrip_cons[j]);
-			}
-			innerstrip_cons.clear();
-		}
+            for (int j = 0; j < innerstrip_cons.size(); j++)
+            {
+                innerstrip_cons_all.push_back(innerstrip_cons[j]);
+            }
+            innerstrip_cons.clear();
+        }
 
-		return 1;
-	}
+        return 1;
+    }
 
-	bool Constraint_Finder::add_adjacent_constraint(cloudblock_Ptrs &blocks, constraints &cons, int node_count)
-	{
-		if (node_count < 2)
-			return false;
+    bool Constraint_Finder::add_adjacent_constraint(cloudblock_Ptrs &blocks, constraints &cons, int node_count)
+    {
+        if (node_count < 2)
+            return false;
 
-		constraint_t adjacent_con;
+        constraint_t adjacent_con;
 
-		adjacent_con.block1 = blocks[node_count - 2];
-		adjacent_con.block2 = blocks[node_count - 1];
-		adjacent_con.con_type = ADJACENT;
-		adjacent_con.Trans1_2 = adjacent_con.block1->pose_lo.inverse() * adjacent_con.block2->pose_lo;
-		adjacent_con.information_matrix = blocks[node_count - 2]->information_matrix_to_next;
-		cons.push_back(adjacent_con);
-		//LOG(WARNING) << "[1] adjacent edge added";
+        adjacent_con.block1 = blocks[node_count - 2];
+        adjacent_con.block2 = blocks[node_count - 1];
+        adjacent_con.con_type = ADJACENT;
+        adjacent_con.Trans1_2 = adjacent_con.block1->pose_lo.inverse() * adjacent_con.block2->pose_lo;
+        adjacent_con.information_matrix = blocks[node_count - 2]->information_matrix_to_next;
+        cons.push_back(adjacent_con);
+        //LOG(WARNING) << "[1] adjacent edge added";
 
-		return true;
-	}
+        return true;
+    }
 
-	bool Constraint_Finder::add_adjacent_constraint(cloudblock_Ptrs &blocks, constraints &cons, Eigen::Matrix4d &tran1_2, int node_count)
-	{
-		constraint_t adjacent_con;
+    bool Constraint_Finder::add_adjacent_constraint(cloudblock_Ptrs &blocks, constraints &cons, Eigen::Matrix4d &tran1_2, int node_count)
+    {
+        constraint_t adjacent_con;
 
-		adjacent_con.block1 = blocks[node_count - 2];
-		adjacent_con.block2 = blocks[node_count - 1];
-		adjacent_con.con_type = ADJACENT;
-		adjacent_con.Trans1_2 = tran1_2;
-		adjacent_con.information_matrix = blocks[node_count - 2]->information_matrix_to_next;
-		cons.push_back(adjacent_con);
+        adjacent_con.block1 = blocks[node_count - 2];
+        adjacent_con.block2 = blocks[node_count - 1];
+        adjacent_con.con_type = ADJACENT;
+        adjacent_con.Trans1_2 = tran1_2;
+        adjacent_con.information_matrix = blocks[node_count - 2]->information_matrix_to_next;
+        cons.push_back(adjacent_con);
 
-		//LOG(WARNING) << "[1] adjacent edge added";
+        //LOG(WARNING) << "[1] adjacent edge added";
 
-		return true;
-	}
+        return true;
+    }
 
-	bool Constraint_Finder::clear_registration_constraint(constraints &cons)
-	{
-		int con_count = cons.size();
-		for (int i = 0; i < con_count; i++)
-		{
-			if (cons[i].con_type == REGISTRATION)
-			{
-				cons.erase(cons.begin() + i);
-				i--;
-				con_count--;
-			}
-		}
-		return true;
-	}
+    bool Constraint_Finder::clear_registration_constraint(constraints &cons)
+    {
+        int con_count = cons.size();
+        for (int i = 0; i < con_count; i++)
+        {
+            if (cons[i].con_type == REGISTRATION)
+            {
+                cons.erase(cons.begin() + i);
+                i--;
+                con_count--;
+            }
+        }
+        return true;
+    }
 
-	bool Constraint_Finder::cancel_registration_constraint(constraints &cons)
-	{
-		int con_count = cons.size();
-		float confidence_thre = 0.2;
-		float sigma_thre = 0.3;
-		for (int i = 0; i < con_count; i++)
-		{
-			if (cons[i].con_type == REGISTRATION) //Registration ----> history  //or we will keep the registration edge
-			{
-				if (cons[i].confidence < confidence_thre || cons[i].sigma > sigma_thre) //Not very reliable edges
-					cons[i].con_type = HISTORY;
-			}
+    bool Constraint_Finder::cancel_registration_constraint(constraints &cons)
+    {
+        int con_count = cons.size();
+        float confidence_thre = 0.2;
+        float sigma_thre = 0.3;
+        for (int i = 0; i < con_count; i++)
+        {
+            if (cons[i].con_type == REGISTRATION) //Registration ----> history  //or we will keep the registration edge
+            {
+                if (cons[i].confidence < confidence_thre || cons[i].sigma > sigma_thre) //Not very reliable edges
+                    cons[i].con_type = HISTORY;
+            }
 
-			if (cons[i].con_type == NONE) //None -----> deleted
-			{
-				cons.erase(cons.begin() + i);
-				i--;
-				con_count--;
-			}
-		}
-		return true;
-	}
+            if (cons[i].con_type == NONE) //None -----> deleted
+            {
+                cons.erase(cons.begin() + i);
+                i--;
+                con_count--;
+            }
+        }
+        return true;
+    }
+    // 查找回环
+    int Constraint_Finder::find_overlap_registration_constraint(cloudblock_Ptrs &blocks, constraints &cons,
+                                                                float neighbor_radius, float min_iou_thre, int adjacent_id_thre,
+                                                                bool search_neighbor_2d, int max_neighbor)
+    {
+        if (blocks.size() < adjacent_id_thre + 2)
+            return 0;
 
-	int Constraint_Finder::find_overlap_registration_constraint(cloudblock_Ptrs &blocks, constraints &cons,
-																float neighbor_radius, float min_iou_thre, int adjacent_id_thre,
-																bool search_neighbor_2d, int max_neighbor)
-	{
-		if (blocks.size() < adjacent_id_thre + 2)
-			return 0;
+        std::vector<int> pointIdx;
+        std::vector<float> pointSquaredDistance;
+        int count_reg_edge = 0;
+        int cur_id = blocks.size() - 1;
 
-		std::vector<int> pointIdx;
-		std::vector<float> pointSquaredDistance;
-		int count_reg_edge = 0;
-		int cur_id = blocks.size() - 1;
+        if (search_neighbor_2d) //2D: x,y
+        {
+            pcl::PointCloud<pcl::PointXY>::Ptr cp_cloud(new pcl::PointCloud<pcl::PointXY>());
 
-		if (search_neighbor_2d) //2D: x,y
-		{
-			pcl::PointCloud<pcl::PointXY>::Ptr cp_cloud(new pcl::PointCloud<pcl::PointXY>());
+            for (int i = 0; i < blocks.size() - 1; i++)
+            {
+                pcl::PointXY cp; // center point
 
-			for (int i = 0; i < blocks.size() - 1; i++)
-			{
-				pcl::PointXY cp;
-				cp.x = blocks[i]->pose_lo(0, 3);
-				cp.y = blocks[i]->pose_lo(1, 3);
-				cp_cloud->push_back(cp);
-			}
+                // 取blocks的位姿 这里输进来的是submap 以各自的最后一帧为pose_lo
+                cp.x = blocks[i]->pose_lo(0, 3);
+                cp.y = blocks[i]->pose_lo(1, 3);
+                cp_cloud->push_back(cp);
+            }
 
-			pcl::KdTreeFLANN<pcl::PointXY> kdtree;
-			kdtree.setInputCloud(cp_cloud);
+            pcl::KdTreeFLANN<pcl::PointXY> kdtree;
+            kdtree.setInputCloud(cp_cloud);
 
-			pcl::PointXY cp_search;
-			cp_search.x = blocks[cur_id]->pose_lo(0, 3);
-			cp_search.y = blocks[cur_id]->pose_lo(1, 3);
+            // 查找当前帧的最近邻
+            pcl::PointXY cp_search;
+            cp_search.x = blocks[cur_id]->pose_lo(0, 3);
+            cp_search.y = blocks[cur_id]->pose_lo(1, 3);
 
-			kdtree.radiusSearch(cp_search, neighbor_radius, pointIdx, pointSquaredDistance, max_neighbor);
-		}
-		else //3D: x,y,z
-		{
-			pcl::PointCloud<pcl::PointXYZ>::Ptr cp_cloud(new pcl::PointCloud<pcl::PointXYZ>());
+            kdtree.radiusSearch(cp_search, neighbor_radius, pointIdx, pointSquaredDistance, max_neighbor);
+        }
+        else //3D: x,y,z
+        {
+            pcl::PointCloud<pcl::PointXYZ>::Ptr cp_cloud(new pcl::PointCloud<pcl::PointXYZ>());
 
-			for (int i = 0; i < blocks.size() - 1; i++)
-			{
-				pcl::PointXYZ cp;
-				cp.x = blocks[i]->pose_lo(0, 3);
-				cp.y = blocks[i]->pose_lo(1, 3);
-				cp.z = blocks[i]->pose_lo(2, 3);
-				cp_cloud->push_back(cp);
-			}
+            for (int i = 0; i < blocks.size() - 1; i++)
+            {
+                pcl::PointXYZ cp;
+                cp.x = blocks[i]->pose_lo(0, 3);
+                cp.y = blocks[i]->pose_lo(1, 3);
+                cp.z = blocks[i]->pose_lo(2, 3);
+                cp_cloud->push_back(cp);
+            }
 
-			pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
-			kdtree.setInputCloud(cp_cloud);
+            pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+            kdtree.setInputCloud(cp_cloud);
 
-			pcl::PointXYZ cp_search;
-			cp_search.x = blocks[cur_id]->pose_lo(0, 3);
-			cp_search.y = blocks[cur_id]->pose_lo(1, 3);
-			cp_search.z = blocks[cur_id]->pose_lo(2, 3);
+            pcl::PointXYZ cp_search;
+            cp_search.x = blocks[cur_id]->pose_lo(0, 3);
+            cp_search.y = blocks[cur_id]->pose_lo(1, 3);
+            cp_search.z = blocks[cur_id]->pose_lo(2, 3);
 
-			kdtree.radiusSearch(cp_search, neighbor_radius, pointIdx, pointSquaredDistance, max_neighbor);
-		}
+            kdtree.radiusSearch(cp_search, neighbor_radius, pointIdx, pointSquaredDistance, max_neighbor);
+        }
 
-		for (int j = 0; j < pointIdx.size(); j++)
-		{
-			double iou = calculate_iou(blocks[cur_id]->bound, blocks[pointIdx[j]]->bound); //use (global) bbx instead of (local) bbx
+        for (int j = 0; j < pointIdx.size(); j++)
+        {
+            // 计算搜索结果的交并比
+            double iou = calculate_iou(blocks[cur_id]->bound, blocks[pointIdx[j]]->bound); //use (global) bbx instead of (local) bbx
 
-			bool is_adjacent = judge_adjacent_by_id(blocks[cur_id]->id_in_strip, blocks[pointIdx[j]]->id_in_strip, adjacent_id_thre);
+            // 如果太近 就不要这个回环
+            bool is_adjacent = judge_adjacent_by_id(blocks[cur_id]->id_in_strip, blocks[pointIdx[j]]->id_in_strip, adjacent_id_thre);
 
-			if (!is_adjacent)
-				LOG(WARNING) << "IOU of candidate registration edge:" << iou;
+            if (!is_adjacent)
+                LOG(WARNING) << "IOU of candidate registration edge:" << iou;
 
-			//enough IoU of bbx and not adjacent blocks
-			if ((!is_adjacent) && (iou > min_iou_thre))
-			{
-				constraint_t registration_con;
-				registration_con.block1 = blocks[pointIdx[j]]; //history map (target)
-				registration_con.block2 = blocks[cur_id];	   //current map (source)
-				registration_con.con_type = REGISTRATION;
-				registration_con.Trans1_2 = registration_con.block1->pose_lo.inverse() * registration_con.block2->pose_lo;
-				registration_con.overlapping_ratio = iou;
+            //enough IoU of bbx and not adjacent blocks
+            // 足够的交并比 且 不是相邻的点云
+            if ((!is_adjacent) && (iou > min_iou_thre))
+            {
+                constraint_t registration_con;
+                registration_con.block1 = blocks[pointIdx[j]]; //history map (target)
+                registration_con.block2 = blocks[cur_id];      //current map (source)
+                registration_con.con_type = REGISTRATION;
+                registration_con.Trans1_2 = registration_con.block1->pose_lo.inverse() * registration_con.block2->pose_lo;
+                registration_con.overlapping_ratio = iou;
 
-				cons.push_back(registration_con);
-				count_reg_edge++;
-			}
-		}
+                cons.push_back(registration_con);
+                count_reg_edge++;
+            }
+        }
 
-		std::sort(cons.begin(), cons.end(), [](const constraint_t &con_a, const constraint_t &con_b) { return con_a.overlapping_ratio > con_b.overlapping_ratio; }); //sort (larger overlapping ratio edge would be registered at first)
+        std::sort(cons.begin(), cons.end(), [](const constraint_t &con_a, const constraint_t &con_b) { return con_a.overlapping_ratio > con_b.overlapping_ratio; }); //sort (larger overlapping ratio edge would be registered at first)
 
-		LOG(WARNING) << "[" << count_reg_edge << "] candidate registration edge found";
+        LOG(WARNING) << "[" << count_reg_edge << "] candidate registration edge found";
 
-		return count_reg_edge;
-	}
+        return count_reg_edge;
+    }
 
-	bool Constraint_Finder::double_check_tran(Eigen::Matrix4d &global_reg_tran, Eigen::Matrix4d &lo_predicted_tran,Eigen::Matrix4d &trusted_tran,
-														 double translation_thre, double rotation_deg_thre)
-	{
+    bool Constraint_Finder::double_check_tran(Eigen::Matrix4d &global_reg_tran, Eigen::Matrix4d &lo_predicted_tran, Eigen::Matrix4d &trusted_tran,
+                                              double translation_thre, double rotation_deg_thre)
+    {
 
-		Eigen::Matrix4d tran_diff = global_reg_tran.inverse() * lo_predicted_tran;
+        Eigen::Matrix4d tran_diff = global_reg_tran.inverse() * lo_predicted_tran;
 
-		Eigen::AngleAxisd rs(tran_diff.block<3, 3>(0, 0));
-		double rotation_diff_deg = std::abs(rs.angle()) * 180.0 / M_PI;
+        Eigen::AngleAxisd rs(tran_diff.block<3, 3>(0, 0));
+        double rotation_diff_deg = std::abs(rs.angle()) * 180.0 / M_PI;
 
-		Eigen::Vector3d translation_vec = tran_diff.block<3, 1>(0, 3);
-		double translation_diff = translation_vec.norm();
+        Eigen::Vector3d translation_vec = tran_diff.block<3, 1>(0, 3);
+        double translation_diff = translation_vec.norm();
 
-		if (rotation_diff_deg > rotation_deg_thre || translation_diff > translation_thre) // we' d like to trust the lo_predicted_tran
-		{
-			LOG(WARNING) << "Too much difference between global registration and odometry prediction, we' would trust odometry";
-			trusted_tran = lo_predicted_tran;
-			return false;
-		}
-		else
-		{
-			LOG(INFO) << "We' would trust global registration";
-			trusted_tran = global_reg_tran;
-			return true;
-		}
-	}
+        if (rotation_diff_deg > rotation_deg_thre || translation_diff > translation_thre) // we' d like to trust the lo_predicted_tran
+        {
+            LOG(WARNING) << "Too much difference between global registration and odometry prediction, we' would trust odometry";
+            trusted_tran = lo_predicted_tran;
+            return false;
+        }
+        else
+        {
+            LOG(INFO) << "We' would trust global registration";
+            trusted_tran = global_reg_tran;
+            return true;
+        }
+    }
 
 #if 0
 
@@ -542,51 +548,51 @@ namespace lo
 
 #endif
 
-	bool
-	Constraint_Finder::assign_block2constraint(strip &all_blocks, constraints &all_cons)
-	{
-		int current_cons_count = all_cons.size();
+    bool
+    Constraint_Finder::assign_block2constraint(strip &all_blocks, constraints &all_cons)
+    {
+        int current_cons_count = all_cons.size();
 
-		for (int i = 0; i < current_cons_count; i++)
-		{
-			all_cons[i].block1 = boost::make_shared<cloudblock_t>(all_blocks[all_cons[i].block1->unique_id]);
-			all_cons[i].block2 = boost::make_shared<cloudblock_t>(all_blocks[all_cons[i].block2->unique_id]);
-			//LOG(INFO)<<"Assign "<< all_cons[i].unique_id;
-		}
+        for (int i = 0; i < current_cons_count; i++)
+        {
+            all_cons[i].block1 = boost::make_shared<cloudblock_t>(all_blocks[all_cons[i].block1->unique_id]);
+            all_cons[i].block2 = boost::make_shared<cloudblock_t>(all_blocks[all_cons[i].block2->unique_id]);
+            //LOG(INFO)<<"Assign "<< all_cons[i].unique_id;
+        }
 
-		return 1;
-	}
+        return 1;
+    }
 
-	bool Constraint_Finder::judge_adjacent_by_id(int id_1, int id_2, int submap_id_diff)
-	{
-		bool is_adjacent = false;
+    bool Constraint_Finder::judge_adjacent_by_id(int id_1, int id_2, int submap_id_diff)
+    {
+        bool is_adjacent = false;
 
-		if ((id_1 <= id_2 + submap_id_diff) && (id_1 >= id_2 - submap_id_diff))
-		{
-			is_adjacent = true;
-		}
-		return is_adjacent;
-	}
+        if ((id_1 <= id_2 + submap_id_diff) && (id_1 >= id_2 - submap_id_diff))
+        {
+            is_adjacent = true;
+        }
+        return is_adjacent;
+    }
 
-	double Constraint_Finder::calculate_iou(bounds_t &bound1, bounds_t &bound2) //2d bbx iou
-	{
-		double area1 = (bound1.max_x - bound1.min_x) * (bound1.max_y - bound1.min_y);
-		double area2 = (bound2.max_x - bound2.min_x) * (bound2.max_y - bound2.min_y);
+    double Constraint_Finder::calculate_iou(bounds_t &bound1, bounds_t &bound2) //2d bbx iou
+    {
+        double area1 = (bound1.max_x - bound1.min_x) * (bound1.max_y - bound1.min_y);
+        double area2 = (bound2.max_x - bound2.min_x) * (bound2.max_y - bound2.min_y);
 
-		double x1 = max_(bound1.min_x, bound2.min_x);
-		double y1 = max_(bound1.min_y, bound2.min_y);
+        double x1 = max_(bound1.min_x, bound2.min_x);
+        double y1 = max_(bound1.min_y, bound2.min_y);
 
-		double x2 = min_(bound1.max_x, bound2.max_x);
-		double y2 = min_(bound1.max_y, bound2.max_y);
+        double x2 = min_(bound1.max_x, bound2.max_x);
+        double y2 = min_(bound1.max_y, bound2.max_y);
 
-		double w = max_(0, x2 - x1);
-		double h = max_(0, y2 - y1);
+        double w = max_(0, x2 - x1);
+        double h = max_(0, y2 - y1);
 
-		double area1i2 = w * h;
+        double area1i2 = w * h;
 
-		double iou = area1i2 / (area1 + area2 - area1i2);
+        double iou = area1i2 / (area1 + area2 - area1i2);
 
-		return iou;
-	}
+        return iou;
+    }
 
 } // namespace lo

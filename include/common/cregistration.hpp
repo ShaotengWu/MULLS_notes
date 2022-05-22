@@ -444,6 +444,7 @@ namespace lo
             for (int i = 0; i < target_kpts_num; i++)
             {
                 Eigen::VectorXf temp_descriptor(11);
+                // ncc用int编码 存在normal里面 0是较近的点形成的ncc
                 int temp_descriptor_close = (int)target_kpts->points[i].normal[0];
                 int temp_descriptor_far = (int)target_kpts->points[i].normal[1];
                 // neighborhood category with its distance to the query point
@@ -494,6 +495,7 @@ namespace lo
 
             std::vector<std::pair<int, float>> dist_array;
 
+            // 暴力匹配 L1距离
             omp_set_num_threads(min_(6, omp_get_max_threads())); //TODO: speed up
 #pragma omp parallel for                                         //Multi-thread
             for (int i = 0; i < target_kpts_num; i++)
@@ -521,6 +523,7 @@ namespace lo
                     //LOG(INFO) << "keypoint indice: " << target_bscs[0][i].keypointIndex_;
                     int min_dist_col_index = 0;
                     float min_dist_row = FLT_MAX;
+                    // 为target 找source中匹配最小的
                     for (int j = 0; j < source_kpts_num; j++)
                     {
                         if (dist_table[i][j] < min_dist_row)
@@ -530,10 +533,11 @@ namespace lo
                         }
                     }
                     bool refined_corr = true;
-                    if (reciprocal_on) //reciprocal nearest neighbor correspondnece
+                    if (reciprocal_on) //reciprocal nearest neighbor correspondnece 互相最近邻
                     {
                         for (int j = 0; j < target_kpts_num; j++)
                         {
+                            // 当前匹配值是不是这一列（也就是对应source点的所有匹配）中最低的
                             if (min_dist_row > dist_table[j][min_dist_col_index] + dist_margin_thre)
                             {
                                 refined_corr = false;
@@ -549,7 +553,7 @@ namespace lo
                     }
                 }
             }
-            else //fixed num correspondence
+            else //fixed num correspondence // 找k个最近邻
             {
                 for (int i = 0; i < target_kpts_num; i++)
                 {
@@ -666,7 +670,7 @@ namespace lo
         {
             //reference: https://github.com/MIT-SPARK/TEASER-plusplus
             //TEASER: Fast and Certifiable Point Cloud Registration, TRO, Heng Yang et al.
-
+#define TEASER_ON 1
 #if TEASER_ON
 
             int teaser_state = 0; //(failed: -1, successful[need check]: 0, successful[reliable]: 1)
@@ -1259,6 +1263,7 @@ namespace lo
                 if (apply_motion_undistortion_while_registration && i == 0) //do undistortion at the first iteration
                 {
                     // T_source_target = T_target_source.inverse() 越接近最后一个点 s越小 将点云转到source坐标系下
+                    // 注意不是对原始数据的操作 而是备份 在估计完之后会对原始数据操作
                     cfilter.batch_apply_motion_compensation(registration_cons.block2->pc_ground_down, registration_cons.block2->pc_pillar_down, registration_cons.block2->pc_beam_down,
                                                             registration_cons.block2->pc_facade_down, registration_cons.block2->pc_roof_down, registration_cons.block2->pc_vertex,
                                                             pc_ground_sc, pc_pillar_sc, pc_beam_sc, pc_facade_sc, pc_roof_sc, pc_vertex_sc, inv_init_guess_mat); //for source point cloud
